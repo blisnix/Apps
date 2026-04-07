@@ -29,11 +29,20 @@ OS         = platform.system()
 PY_VERSION = sys.version_info
 OS_NAMES   = {"Windows": "Windows", "Darwin": "macOS", "Linux": "Linux"}
 
+_UI_FONT = {"Windows": "Segoe UI", "Darwin": "Helvetica Neue"}.get(OS, "Ubuntu")
+
 THEME = {
-    "BG": "#0a0f1a", "BG2": "#0d1f35", "BG3": "#0f1e30",
-    "ACCENT": "#00e5ff", "GREEN": "#00c853", "RED": "#ff5252",
-    "YELLOW": "#ffeb3b", "GREY": "#546e7a", "FG": "#e0f7fa",
-    "FONT": "Courier New",
+    "BG":     "#0d1117",
+    "BG2":    "#161b22",
+    "BG3":    "#1c2333",
+    "ACCENT": "#58a6ff",
+    "GREEN":  "#3fb950",
+    "RED":    "#f85149",
+    "YELLOW": "#d29922",
+    "GREY":   "#8b949e",
+    "FG":     "#e6edf3",
+    "BORDER": "#30363d",
+    "FONT":   _UI_FONT,
 }
 
 VENV_DIR    = os.path.join(os.path.expanduser("~"), ".autodoc_venv")
@@ -104,8 +113,8 @@ def get_fix_msg(prereq):
 def make_button(parent, text, cmd, bg, hover_bg, width=None):
     """Label-based button — works on macOS where tk.Button ignores bg/fg."""
     frame = tk.Frame(parent, bg=bg, cursor="hand2")
-    lbl = tk.Label(frame, text=text, font=(THEME["FONT"], 9, "bold"),
-                   bg=bg, fg=THEME["FG"], padx=12, pady=8, cursor="hand2")
+    lbl = tk.Label(frame, text=text, font=(THEME["FONT"], 10, "bold"),
+                   bg=bg, fg=THEME["FG"], padx=16, pady=9, cursor="hand2")
     if width: lbl.config(width=width)
     lbl.pack()
     def _click(e): cmd()
@@ -132,10 +141,10 @@ def make_button(parent, text, cmd, bg, hover_bg, width=None):
     return frame
 
 def make_section_label(parent, text):
-    f = tk.Frame(parent, bg=THEME["BG"], padx=14); f.pack(fill="x", pady=(8, 2))
+    f = tk.Frame(parent, bg=THEME["BG"], padx=14); f.pack(fill="x", pady=(10, 3))
     tk.Label(f, text=f"  {text}  ", font=(THEME["FONT"], 8, "bold"),
-             fg=THEME["GREY"], bg=THEME["BG"]).pack(side="left")
-    tk.Frame(f, bg="#1a2a3a", height=1).pack(side="left", fill="x", expand=True, pady=5)
+             fg=THEME["ACCENT"], bg=THEME["BG"]).pack(side="left")
+    tk.Frame(f, bg=THEME["BORDER"], height=1).pack(side="left", fill="x", expand=True, pady=5)
 
 # === LAUNCHER ===
 
@@ -149,16 +158,18 @@ class Launcher:
 
     def _build_ui(self):
         T = THEME
-        hdr = tk.Frame(self.root, bg=T["BG2"], pady=16); hdr.pack(fill="x")
-        tk.Label(hdr, text="AUTO-DOC", font=(T["FONT"], 16, "bold"),
+        hdr = tk.Frame(self.root, bg=T["BG2"], pady=22); hdr.pack(fill="x")
+        tk.Label(hdr, text="AUTO-DOC", font=(T["FONT"], 22, "bold"),
                  fg=T["ACCENT"], bg=T["BG2"]).pack()
-        br = tk.Frame(hdr, bg=T["BG2"]); br.pack(pady=(4, 0))
-        oc = {"Windows":"#1565c0","Darwin":"#4a148c","Linux":"#1b5e20"}
+        tk.Label(hdr, text="Process Documentation Tool", font=(T["FONT"], 10),
+                 fg=T["GREY"], bg=T["BG2"]).pack(pady=(2, 8))
+        br = tk.Frame(hdr, bg=T["BG2"]); br.pack()
+        oc = {"Windows":"#1d4ed8","Darwin":"#7c3aed","Linux":"#15803d"}
         tk.Label(br, text=f"  {OS_NAMES.get(OS,OS)}  ", font=(T["FONT"],8,"bold"),
-                 fg="white", bg=oc.get(OS,"#333"), padx=6, pady=2).pack(side="left")
-        tk.Label(br, text=f"  Python {PY_VERSION.major}.{PY_VERSION.minor}.{PY_VERSION.micro}  |  Setup & Launcher",
-                 font=(T["FONT"],8), fg=T["GREY"], bg=T["BG2"]).pack(side="left", padx=8)
-        intro = tk.Frame(self.root, bg=T["BG"], padx=20, pady=10); intro.pack(fill="x")
+                 fg="white", bg=oc.get(OS,"#374151"), padx=8, pady=3).pack(side="left")
+        tk.Label(br, text=f"  Python {PY_VERSION.major}.{PY_VERSION.minor}.{PY_VERSION.micro}  ·  Setup & Launcher",
+                 font=(T["FONT"],9), fg=T["GREY"], bg=T["BG2"]).pack(side="left", padx=8)
+        intro = tk.Frame(self.root, bg=T["BG"], padx=20, pady=12); intro.pack(fill="x")
         tk.Label(intro, text="Checks all prerequisites needed to run Auto-Doc.\nMissing packages can be installed automatically.",
                  font=(T["FONT"],9), fg=T["GREY"], bg=T["BG"], justify="left").pack(anchor="w")
         make_section_label(self.root, "PREREQUISITE STATUS")
@@ -174,8 +185,8 @@ class Launcher:
         make_section_label(self.root, "INSTALL LOG")
         lf = tk.Frame(self.root, bg=T["BG"], padx=14); lf.pack(fill="x")
         ls = tk.Scrollbar(lf); ls.pack(side="right", fill="y")
-        self.log_box = tk.Text(lf, height=5, font=(T["FONT"],8), bg="#060d17", fg="#4dd0e1",
-                               insertbackground="#4dd0e1", relief="flat", bd=0,
+        self.log_box = tk.Text(lf, height=5, font=(T["FONT"],9), bg=T["BG2"], fg=T["ACCENT"],
+                               insertbackground=T["ACCENT"], relief="flat", bd=0,
                                yscrollcommand=ls.set, state="disabled", wrap="word")
         self.log_box.pack(fill="x"); ls.config(command=self.log_box.yview)
         for tag, color in [("ok",T["GREEN"]),("err",T["RED"]),("info",T["ACCENT"]),("warn",T["YELLOW"])]:
@@ -193,12 +204,12 @@ class Launcher:
     def _build_row(self, parent, prereq, idx):
         T = THEME; bg = T["BG3"] if idx % 2 == 0 else "#111c2b"
         row = tk.Frame(parent, bg=bg, padx=12, pady=8); row.pack(fill="x", pady=1)
-        il = tk.Label(row, text="...", font=(T["FONT"],11), fg=T["YELLOW"], bg=bg, width=3)
+        il = tk.Label(row, text="·", font=(T["FONT"],13), fg=T["YELLOW"], bg=bg, width=2)
         il.pack(side="left"); self.icon_labels[prereq["name"]] = il
         col = tk.Frame(row, bg=bg); col.pack(side="left", fill="x", expand=True)
         tk.Label(col, text=prereq["name"], font=(T["FONT"],10,"bold"), fg=T["FG"], bg=bg, anchor="w").pack(fill="x")
         tk.Label(col, text=prereq["purpose"], font=(T["FONT"],8), fg=T["GREY"], bg=bg, anchor="w").pack(fill="x")
-        sl = tk.Label(row, text="Checking...", font=(T["FONT"],9), fg=T["YELLOW"], bg=bg, width=22, anchor="e")
+        sl = tk.Label(row, text="Checking...", font=(T["FONT"],9), fg=T["YELLOW"], bg=bg, width=20, anchor="e")
         sl.pack(side="right"); self.status_labels[prereq["name"]] = sl
 
     def _log(self, msg, tag="info"):
@@ -227,17 +238,17 @@ class Launcher:
             try: ok = p["check"]()
             except: ok = False
             if ok:
-                self.root.after(0, lambda n=n: self._set_row(n,"OK","Installed",T["GREEN"],T["GREEN"]))
-                self._log_later(f"OK  {n}", "ok")
+                self.root.after(0, lambda n=n: self._set_row(n,"✓","Installed",T["GREEN"],T["GREEN"]))
+                self._log_later(f"✓  {n}", "ok")
             else:
                 all_ok = False
                 if p.get("pip"):
                     missing.append(p)
-                    self.root.after(0, lambda n=n: self._set_row(n,"X","Missing",T["RED"],T["YELLOW"]))
-                    self._log_later(f"X  {n} — can auto-install", "warn")
+                    self.root.after(0, lambda n=n: self._set_row(n,"✗","Missing",T["RED"],T["YELLOW"]))
+                    self._log_later(f"✗  {n} — can auto-install", "warn")
                 else:
-                    self.root.after(0, lambda n=n: self._set_row(n,"!","Manual fix",T["YELLOW"],T["YELLOW"]))
-                    self._log_later(f"!  {n} — {get_fix_msg(p)}", "warn")
+                    self.root.after(0, lambda n=n: self._set_row(n,"⚠","Manual fix",T["YELLOW"],T["YELLOW"]))
+                    self._log_later(f"⚠  {n} — {get_fix_msg(p)}", "warn")
         if all_ok: self.root.after(0, self._on_all_ok)
         elif missing: self.root.after(0, lambda: self.overall_var.set(f"{len(missing)} package(s) missing"))
         else: self.root.after(0, lambda: self.overall_var.set("Manual fixes required"))
@@ -261,15 +272,15 @@ class Launcher:
             return
         pkgs = [p["pip"] for p in missing]
         for p in missing:
-            self.root.after(0, lambda n=p["name"]: self._set_row(n,"...","Installing...",T["YELLOW"],T["YELLOW"]))
+            self.root.after(0, lambda n=p["name"]: self._set_row(n,"⟳","Installing...",T["YELLOW"],T["YELLOW"]))
         self._log_later(f"Batch installing: {', '.join(pkgs)}", "info")
         try:
             r = subprocess.run([sys.executable,"-m","pip","install"]+pkgs+["--quiet","--no-warn-script-location"],
                                capture_output=True, text=True, timeout=300)
             if r.returncode == 0:
                 for p in missing:
-                    self._log_later(f"OK  {p['name']}", "ok")
-                    self.root.after(0, lambda n=p["name"]: self._set_row(n,"OK","Installed",T["GREEN"],T["GREEN"]))
+                    self._log_later(f"✓  {p['name']}", "ok")
+                    self.root.after(0, lambda n=p["name"]: self._set_row(n,"✓","Installed",T["GREEN"],T["GREEN"]))
             else:
                 self._log_later("Batch failed, trying individually...", "warn")
                 for p in missing:
@@ -277,11 +288,11 @@ class Launcher:
                         r2 = subprocess.run([sys.executable,"-m","pip","install",p["pip"],"--quiet"],
                                             capture_output=True, text=True, timeout=180)
                         if r2.returncode == 0:
-                            self._log_later(f"OK  {p['name']}", "ok")
-                            self.root.after(0, lambda n=p["name"]: self._set_row(n,"OK","Installed",T["GREEN"],T["GREEN"]))
+                            self._log_later(f"✓  {p['name']}", "ok")
+                            self.root.after(0, lambda n=p["name"]: self._set_row(n,"✓","Installed",T["GREEN"],T["GREEN"]))
                         else:
-                            self._log_later(f"X  {p['name']} failed", "err")
-                            self.root.after(0, lambda n=p["name"]: self._set_row(n,"X","Failed",T["RED"],T["RED"]))
+                            self._log_later(f"✗  {p['name']} failed", "err")
+                            self.root.after(0, lambda n=p["name"]: self._set_row(n,"✗","Failed",T["RED"],T["RED"]))
                     except Exception as e:
                         self._log_later(f"X  {p['name']} error: {e}", "err")
         except Exception as e:
@@ -459,8 +470,8 @@ def _run_main_app():
             self.canvas.bind("<B1-Motion>", self._drag)
             self.canvas.bind("<ButtonRelease-1>", self._release)
             self.status = tk.StringVar(value="Select a tool and draw on the screenshot")
-            tk.Label(self.win, textvariable=self.status, font=(T["FONT"],8), fg=T["ACCENT"],
-                     bg="#060d17", anchor="w", padx=10, pady=4).pack(fill="x", side="bottom")
+            tk.Label(self.win, textvariable=self.status, font=(T["FONT"],9), fg=T["ACCENT"],
+                     bg=T["BG2"], anchor="w", padx=12, pady=5).pack(fill="x", side="bottom")
 
         def _tool_changed(self):
             self.tool = self.tool_var.get()
@@ -580,23 +591,25 @@ def _run_main_app():
 
         def _build_ui(self):
             os_name = OS_NAMES.get(OS, OS)
-            ob = {"Windows":"#1565c0","Darwin":"#4a148c","Linux":"#1b5e20"}
-            hdr = tk.Frame(self.root, bg=T["BG2"], pady=14); hdr.pack(fill="x")
-            tk.Label(hdr, text="AUTO-DOC", font=(T["FONT"],15,"bold"), fg=T["ACCENT"], bg=T["BG2"]).pack()
+            ob = {"Windows":"#1d4ed8","Darwin":"#7c3aed","Linux":"#15803d"}
+            hdr = tk.Frame(self.root, bg=T["BG2"], pady=20); hdr.pack(fill="x")
+            tk.Label(hdr, text="AUTO-DOC", font=(T["FONT"],20,"bold"), fg=T["ACCENT"], bg=T["BG2"]).pack()
+            tk.Label(hdr, text="Process Documentation Tool", font=(T["FONT"],9),
+                     fg=T["GREY"], bg=T["BG2"]).pack(pady=(2,6))
             br = tk.Frame(hdr, bg=T["BG2"]); br.pack()
             tk.Label(br, text=f"  {os_name}  ", font=(T["FONT"],8,"bold"), fg="white",
-                     bg=ob.get(OS,"#333"), padx=6, pady=2).pack(side="left")
-            tk.Label(br, text="  Windows | macOS | Linux  |  Multi-Monitor  |  Manual Steps",
-                     font=(T["FONT"],8), fg="#4a7fa5", bg=T["BG2"]).pack(side="left")
+                     bg=ob.get(OS,"#374151"), padx=8, pady=3).pack(side="left")
+            tk.Label(br, text="  Multi-Monitor  ·  Screenshot Editor  ·  Word Export",
+                     font=(T["FONT"],9), fg=T["GREY"], bg=T["BG2"]).pack(side="left", padx=8)
 
-            self.status_var = tk.StringVar(value=f"Ready ({os_name})  |  0 steps")
+            self.status_var = tk.StringVar(value=f"Ready  ·  {os_name}  ·  0 steps")
             tk.Label(self.root, textvariable=self.status_var, font=(T["FONT"],9), fg=T["ACCENT"],
-                     bg="#060d17", anchor="w", padx=12, pady=5).pack(fill="x", side="bottom")
+                     bg=T["BG2"], anchor="w", padx=14, pady=7).pack(fill="x", side="bottom")
 
             style = ttk.Style(); style.theme_use("default")
-            style.configure("D.TNotebook", background=T["BG"], borderwidth=0, tabmargins=[14,6,0,0])
-            style.configure("D.TNotebook.Tab", background="#111c2b", foreground="#546e7a",
-                            font=(T["FONT"],9,"bold"), padding=[16,6], borderwidth=0)
+            style.configure("D.TNotebook", background=T["BG"], borderwidth=0, tabmargins=[14,8,0,0])
+            style.configure("D.TNotebook.Tab", background=T["BG2"], foreground=T["GREY"],
+                            font=(T["FONT"],10,"bold"), padding=[18,8], borderwidth=0)
             style.map("D.TNotebook.Tab", background=[("selected",T["BG3"])], foreground=[("selected",T["ACCENT"])])
 
             nb = ttk.Notebook(self.root, style="D.TNotebook"); nb.pack(fill="both", expand=True)
@@ -618,19 +631,19 @@ def _run_main_app():
 
             entry = self._section(left, "ADD STEP")
             tk.Label(entry, text="Step description:", font=(T["FONT"],9), fg=T["GREY"], bg=T["BG3"]).pack(anchor="w")
-            self.step_text = tk.Text(entry, height=3, font=(T["FONT"],10), bg="#111c2b", fg="#80cbc4",
-                                     insertbackground="#80cbc4", relief="flat", bd=4, wrap="word")
+            self.step_text = tk.Text(entry, height=3, font=(T["FONT"],10), bg=T["BG2"], fg=T["FG"],
+                                     insertbackground=T["ACCENT"], relief="flat", bd=6, wrap="word")
             self.step_text.pack(fill="x", pady=(4,8))
             self.preview_var = tk.StringVar(value="")
             tk.Label(entry, textvariable=self.preview_var, font=(T["FONT"],8), fg="#ffeb3b", bg=T["BG3"]).pack(anchor="w")
 
             br = tk.Frame(entry, bg=T["BG3"]); br.pack(fill="x", pady=(4,0))
-            make_button(br, "+ Add Step (no screenshot)", self._add_step_no_shot,
-                        "#1b3a1b","#2e7d32", width=28).pack(side="left", padx=(0,8))
-            make_button(br, "Screenshot + Add Step (F9)", self._add_step_with_shot,
-                        "#1a237e","#283593", width=30).pack(side="left")
-            tk.Label(entry, text="  F9 = screenshot+add | F10 = pause | F11 = export",
-                     font=(T["FONT"],8), fg="#37474f", bg=T["BG3"]).pack(anchor="w", pady=(6,0))
+            make_button(br, "+ Add Step", self._add_step_no_shot,
+                        "#14532d","#15803d", width=16).pack(side="left", padx=(0,8))
+            make_button(br, "Screenshot + Add Step  (F9)", self._add_step_with_shot,
+                        "#1d3461","#1d4ed8", width=28).pack(side="left")
+            tk.Label(entry, text="  F9 = screenshot + add  ·  F10 = pause  ·  F11 = export",
+                     font=(T["FONT"],8), fg=T["GREY"], bg=T["BG3"]).pack(anchor="w", pady=(6,0))
             orow = tk.Frame(entry, bg=T["BG3"]); orow.pack(anchor="w", pady=(4,0))
             tk.Checkbutton(orow, text="  Highlight cursor in screenshots", variable=self.highlight_cursor,
                            font=(T["FONT"],9), fg="#80cbc4", bg=T["BG3"], selectcolor="#111c2b",
@@ -639,23 +652,24 @@ def _run_main_app():
 
             steps_sec = self._section(left, "DOCUMENTED STEPS  (double-click to edit screenshot)")
             ssb = tk.Scrollbar(steps_sec); ssb.pack(side="right", fill="y")
-            self.steps_box = tk.Listbox(steps_sec, font=(T["FONT"],9), bg="#060d17", fg=T["FG"],
-                                        selectbackground="#003d5c", relief="flat", bd=0,
-                                        activestyle="none", yscrollcommand=ssb.set)
+            self.steps_box = tk.Listbox(steps_sec, font=(T["FONT"],10), bg=T["BG2"], fg=T["FG"],
+                                        selectbackground="#1d4ed8", selectforeground=T["FG"],
+                                        relief="flat", bd=0, activestyle="none",
+                                        yscrollcommand=ssb.set)
             self.steps_box.pack(fill="both", expand=True); ssb.config(command=self.steps_box.yview)
             self.steps_box.bind("<<ListboxSelect>>", self._on_step_select)
             self.steps_box.bind("<Double-1>", lambda e: self._open_editor())
 
             ar = tk.Frame(steps_sec, bg=T["BG3"]); ar.pack(fill="x", pady=(5,0))
             for lbl, cmd, bg, hbg in [
-                ("Edit",     self._edit_step,    "#1b3a4b","#1e4d63"),
-                ("Delete",   self._delete_step,  "#3b1515","#5c1f1f"),
-                ("Up",       self._move_up,      "#1b2838","#263545"),
-                ("Down",     self._move_down,    "#1b2838","#263545"),
-                ("View/Edit",self._open_editor,  "#0d3d6b","#1565c0"),
-                ("Save",     self._save_session, "#1b3a1b","#2e7d32"),
-                ("Load",     self._load_session, "#1b2838","#263545"),
-                ("Export",   self._export_word,  "#4a148c","#6a1b9a"),
+                ("Edit",     self._edit_step,    "#1e3a4a","#1e4d63"),
+                ("Delete",   self._delete_step,  "#450a0a","#7f1d1d"),
+                ("↑ Up",     self._move_up,      "#1e293b","#334155"),
+                ("↓ Down",   self._move_down,    "#1e293b","#334155"),
+                ("View/Edit",self._open_editor,  "#1d3461","#1d4ed8"),
+                ("Save",     self._save_session, "#14532d","#15803d"),
+                ("Load",     self._load_session, "#1e293b","#334155"),
+                ("Export",   self._export_word,  "#1d4ed8","#2563eb"),
             ]:
                 make_button(ar, lbl, cmd, bg, hbg).pack(side="left", padx=(0,3))
 
@@ -668,7 +682,7 @@ def _run_main_app():
             pc.pack(fill="both", expand=True, padx=14, pady=(0,6))
             self.pinfo = tk.StringVar(value="Select a step to preview its screenshot")
             tk.Label(pc, textvariable=self.pinfo, font=(T["FONT"],8), fg=T["GREY"], bg=T["BG3"]).pack(anchor="w", pady=(0,6))
-            self.pcanvas = tk.Canvas(pc, bg="#060d17", highlightthickness=0, bd=0, cursor="hand2")
+            self.pcanvas = tk.Canvas(pc, bg=T["BG2"], highlightthickness=0, bd=0, cursor="hand2")
             self.pcanvas.pack(fill="both", expand=True)
             self.pcanvas.bind("<Button-1>", lambda e: self._open_editor())
             self._ptk = None
@@ -777,23 +791,23 @@ def _run_main_app():
             outer = tk.Frame(parent, bg=T["BG"])
             is_steps = title.startswith("DOCUMENTED STEPS")
             outer.pack(fill="both" if is_steps else "x", expand=is_steps)
-            lf = tk.Frame(outer, bg=T["BG"]); lf.pack(fill="x", padx=14, pady=(8,2))
-            tk.Label(lf, text=f"  {title}  ", font=(T["FONT"],8,"bold"), fg=T["GREY"], bg=T["BG"]).pack(side="left")
-            tk.Frame(lf, bg="#1a2a3a", height=1).pack(side="left", fill="x", expand=True, pady=6)
-            inner = tk.Frame(outer, bg=T["BG3"], padx=10, pady=8)
-            inner.pack(fill="both", expand=True, padx=14, pady=(0,6))
+            lf = tk.Frame(outer, bg=T["BG"]); lf.pack(fill="x", padx=14, pady=(10,2))
+            tk.Label(lf, text=f"  {title}  ", font=(T["FONT"],8,"bold"), fg=T["ACCENT"], bg=T["BG"]).pack(side="left")
+            tk.Frame(lf, bg=T["BORDER"], height=1).pack(side="left", fill="x", expand=True, pady=6)
+            inner = tk.Frame(outer, bg=T["BG3"], padx=12, pady=10)
+            inner.pack(fill="both", expand=True, padx=14, pady=(0,8))
             return inner
 
         def _field_row(self, parent, label, varname, width=40):
-            row = tk.Frame(parent, bg=T["BG3"]); row.pack(fill="x", pady=3)
-            tk.Label(row, text=label, font=(T["FONT"],9), fg="#546e7a", bg=T["BG3"]).pack(side="left")
+            row = tk.Frame(parent, bg=T["BG3"]); row.pack(fill="x", pady=4)
+            tk.Label(row, text=label, font=(T["FONT"],9), fg=T["GREY"], bg=T["BG3"]).pack(side="left")
             var = tk.StringVar(); setattr(self, varname, var)
-            tk.Entry(row, textvariable=var, font=(T["FONT"],9), bg="#111c2b", fg="#80cbc4",
-                     insertbackground="#80cbc4", relief="flat", bd=4, width=width).pack(side="left", padx=6)
+            tk.Entry(row, textvariable=var, font=(T["FONT"],10), bg=T["BG2"], fg=T["FG"],
+                     insertbackground=T["ACCENT"], relief="flat", bd=6, width=width).pack(side="left", padx=6)
 
         def _set_status(self, msg):
-            p = "  PAUSED" if self.capture_paused else ""
-            self.status_var.set(f"{msg}  |  {len(self.steps)} steps{p}")
+            p = "  ·  PAUSED" if self.capture_paused else ""
+            self.status_var.set(f"{msg}  ·  {len(self.steps)} steps{p}")
 
         def _os_tips(self):
             tips = {"Darwin":("macOS Permissions","For screenshots:\nSystem Settings > Privacy & Security > Screen Recording\n> Enable for Terminal. Restart app after granting."),
@@ -974,8 +988,14 @@ def _run_main_app():
 
             safe = "".join(c for c in title if c.isalnum() or c in " _-").strip().replace(" ","_")
             fname = f"{safe}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-            out_dir = os.path.expanduser("~/Documents"); os.makedirs(out_dir, exist_ok=True)
-            out_path = os.path.join(out_dir, fname)
+            out_path = filedialog.asksaveasfilename(
+                defaultextension=".docx",
+                filetypes=[("Word Document", "*.docx")],
+                initialdir=os.path.expanduser("~/Documents"),
+                initialfile=fname,
+                title="Export to Word",
+            )
+            if not out_path: return
             doc.save(out_path); messagebox.showinfo("Exported!", f"Saved to:\n{out_path}")
             open_file(out_path)
 
