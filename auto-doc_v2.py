@@ -1,20 +1,3 @@
-"""
-Auto-Doc v2.2 — Self-Contained (Optimized + Screenshot Editor)
-Windows * macOS * Linux
-
-Single-file launcher + documenter. No API key required.
-- Type your own step descriptions
-- Screenshots follow your mouse across multiple monitors
-- Built-in screenshot editor: arrows, rectangles, freehand, text, highlights, crop
-- Preview panel to review screenshots as you work
-- Exports to formatted Word (.docx)
-
-HOW TO RUN:
-    python Auto-Doc.py
-
-Python 3.8+ required. No other files needed.
-"""
-
 import sys
 import os
 import platform
