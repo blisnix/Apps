@@ -4,6 +4,7 @@ import platform
 import subprocess
 import threading
 import importlib
+import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox
 from functools import lru_cache
@@ -93,35 +94,48 @@ def get_fix_msg(prereq):
 
 # === SHARED UI HELPERS ===
 
-def make_button(parent, text, cmd, bg, hover_bg, width=None):
+class ThemedButton(tk.Frame):
     """Label-based button — works on macOS where tk.Button ignores bg/fg."""
-    frame = tk.Frame(parent, bg=bg, cursor="hand2")
-    lbl = tk.Label(frame, text=text, font=(THEME["FONT"], 10, "bold"),
-                   bg=bg, fg=THEME["FG"], padx=16, pady=9, cursor="hand2")
-    if width: lbl.config(width=width)
-    lbl.pack()
-    def _click(e): cmd()
-    def _enter(e): frame.config(bg=hover_bg); lbl.config(bg=hover_bg)
-    def _leave(e): frame.config(bg=bg); lbl.config(bg=bg)
-    for w in (frame, lbl):
-        w.bind("<Button-1>", _click); w.bind("<Enter>", _enter); w.bind("<Leave>", _leave)
-    frame._label = lbl
-    _orig = frame.config
-    def _proxy(**kw):
-        st = kw.pop("state", None); txt = kw.pop("text", None)
-        if st == "disabled":
-            lbl.config(fg=THEME["GREY"])
-            for w2 in (frame, lbl): w2.unbind("<Button-1>"); w2.config(cursor="")
-        elif st == "normal":
-            lbl.config(fg=THEME["FG"])
-            for w2 in (frame, lbl): w2.bind("<Button-1>", _click); w2.config(cursor="hand2")
-        if txt is not None: lbl.config(text=txt)
+    def __init__(self, parent, text, cmd, bg, hover_bg, width=None):
+        super().__init__(parent, bg=bg)
+        self._cmd, self._bg, self._hover_bg = cmd, bg, hover_bg
+        kw = dict(text=text, font=(THEME["FONT"], 10, "bold"),
+                  bg=bg, fg=THEME["FG"], padx=16, pady=9)
+        if width:
+            kw["width"] = width
+        self._lbl = tk.Label(self, **kw)
+        self._lbl.pack()
+        for w in (self, self._lbl):
+            w.bind("<Button-1>", self._click)
+            w.bind("<Enter>",    self._enter)
+            w.bind("<Leave>",    self._leave)
+
+    def _click(self, _): self._cmd()
+    def _enter(self, _): self._set_bg(self._hover_bg)
+    def _leave(self, _): self._set_bg(self._bg)
+
+    def _set_bg(self, color):
+        tk.Frame.config(self, bg=color)
+        self._lbl.config(bg=color)
+
+    def config(self, **kw):
+        state = kw.pop("state", None)
+        text  = kw.pop("text", None)
+        if state == "disabled":
+            self._lbl.config(fg=THEME["GREY"])
+            for w in (self, self._lbl):
+                w.unbind("<Button-1>")
+        elif state == "normal":
+            self._lbl.config(fg=THEME["FG"])
+            for w in (self, self._lbl):
+                w.bind("<Button-1>", self._click)
+        if text is not None:
+            self._lbl.config(text=text)
         if kw:
-            _orig(**kw)
-            for k in ("bg","fg","font"):
-                if k in kw: lbl.config(**{k: kw[k]})
-    frame.config = _proxy
-    return frame
+            tk.Frame.config(self, **kw)
+
+def make_button(parent, text, cmd, bg, hover_bg, width=None):
+    return ThemedButton(parent, text, cmd, bg, hover_bg, width)
 
 def make_section_label(parent, text):
     f = tk.Frame(parent, bg=THEME["BG"], padx=14); f.pack(fill="x", pady=(10, 3))
@@ -133,11 +147,16 @@ def make_section_label(parent, text):
 
 class Launcher:
     def __init__(self, root):
-        self.root = root; root.title("Auto-Doc -- Setup & Launcher")
-        root.geometry("780x660"); root.configure(bg=THEME["BG"]); root.resizable(True, True)
+        self.root = root
+        root.title("Auto-Doc -- Setup & Launcher")
+        root.geometry("780x660")
+        root.configure(bg=THEME["BG"])
+        root.resizable(True, True)
         self.prereqs = get_platform_prereqs()
-        self.icon_labels = {}; self.status_labels = {}
-        self._build_ui(); root.after(300, self._run_checks)
+        self.icon_labels = {}
+        self.status_labels = {}
+        self._build_ui()
+        root.after(300, self._run_checks)
 
     def _build_ui(self):
         T = THEME
@@ -196,10 +215,11 @@ class Launcher:
         sl.pack(side="right"); self.status_labels[prereq["name"]] = sl
 
     def _log(self, msg, tag="info"):
-        import datetime; ts = datetime.datetime.now().strftime("%H:%M:%S")
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
         self.log_box.config(state="normal")
         self.log_box.insert("end", f"[{ts}] {msg}\n", tag)
-        self.log_box.see("end"); self.log_box.config(state="disabled")
+        self.log_box.see("end")
+        self.log_box.config(state="disabled")
 
     def _log_later(self, msg, tag="info"):
         self.root.after(0, lambda: self._log(msg, tag))
@@ -246,6 +266,15 @@ class Launcher:
         self._log("Starting installation...", "info")
         threading.Thread(target=self._install_thread, daemon=True).start()
 
+    def _mark_result(self, p, ok):
+        T = THEME
+        if ok:
+            self._log_later(f"✓  {p['name']}", "ok")
+            self.root.after(0, lambda n=p["name"]: self._set_row(n, "✓", "Installed", T["GREEN"], T["GREEN"]))
+        else:
+            self._log_later(f"✗  {p['name']} failed", "err")
+            self.root.after(0, lambda n=p["name"]: self._set_row(n, "✗", "Failed", T["RED"], T["RED"]))
+
     def _install_thread(self):
         T = THEME
         missing = [p for p in self.prereqs if p.get("pip") and not p["check"]()]
@@ -255,27 +284,21 @@ class Launcher:
             return
         pkgs = [p["pip"] for p in missing]
         for p in missing:
-            self.root.after(0, lambda n=p["name"]: self._set_row(n,"⟳","Installing...",T["YELLOW"],T["YELLOW"]))
+            self.root.after(0, lambda n=p["name"]: self._set_row(n, "⟳", "Installing...", T["YELLOW"], T["YELLOW"]))
         self._log_later(f"Batch installing: {', '.join(pkgs)}", "info")
         try:
-            r = subprocess.run([sys.executable,"-m","pip","install"]+pkgs+["--quiet","--no-warn-script-location"],
+            r = subprocess.run([sys.executable, "-m", "pip", "install"] + pkgs + ["--quiet", "--no-warn-script-location"],
                                capture_output=True, text=True, timeout=300)
             if r.returncode == 0:
                 for p in missing:
-                    self._log_later(f"✓  {p['name']}", "ok")
-                    self.root.after(0, lambda n=p["name"]: self._set_row(n,"✓","Installed",T["GREEN"],T["GREEN"]))
+                    self._mark_result(p, ok=True)
             else:
                 self._log_later("Batch failed, trying individually...", "warn")
                 for p in missing:
                     try:
-                        r2 = subprocess.run([sys.executable,"-m","pip","install",p["pip"],"--quiet"],
+                        r2 = subprocess.run([sys.executable, "-m", "pip", "install", p["pip"], "--quiet"],
                                             capture_output=True, text=True, timeout=180)
-                        if r2.returncode == 0:
-                            self._log_later(f"✓  {p['name']}", "ok")
-                            self.root.after(0, lambda n=p["name"]: self._set_row(n,"✓","Installed",T["GREEN"],T["GREEN"]))
-                        else:
-                            self._log_later(f"✗  {p['name']} failed", "err")
-                            self.root.after(0, lambda n=p["name"]: self._set_row(n,"✗","Failed",T["RED"],T["RED"]))
+                        self._mark_result(p, ok=r2.returncode == 0)
                     except Exception as e:
                         self._log_later(f"X  {p['name']} error: {e}", "err")
         except Exception as e:
@@ -344,8 +367,9 @@ def _run_main_app():
             draw.ellipse([px-r-hw,py-r-hw,px+r+hw,py+r+hw], outline=W, width=hw)
             draw.ellipse([px-r,py-r,px+r,py+r], outline=R, width=th)
             gap = r+4; arm = int(r*0.75)
-            for dx,dy in [(1,0),(-1,0),(0,1),(0,-1)]:
-                x1,y1 = px+dx*gap, py+dy*gap; x2,y2 = px+dx*(gap+arm), py+dy*(gap+arm)
+            for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]:
+                x1, y1 = px+dx*gap, py+dy*gap
+                x2, y2 = px+dx*(gap+arm), py+dy*(gap+arm)
                 draw.line([x1,y1,x2,y2], fill=W, width=th+2)
                 draw.line([x1,y1,x2,y2], fill=R, width=th)
         except: pass
@@ -409,13 +433,20 @@ def _run_main_app():
             self.original = pil_image.copy()
             self.img = pil_image.copy().convert("RGBA")
             self.history = [self.img.copy()]
-            self.tool = "arrow"; self.color = "#ff0000"; self.width = 3
-            self._start = None; self._freehand = []; self._preview_id = None
+            self.tool = "arrow"
+            self.color = "#ff0000"
+            self.width = 3
+            self._start = None
+            self._freehand = []
+            self._preview_id = None
 
             self.win = tk.Toplevel(parent)
-            self.win.title("Screenshot Editor"); self.win.geometry("1100x780")
-            self.win.configure(bg=T["BG"]); self.win.grab_set()
-            self._build_ui(); self._render()
+            self.win.title("Screenshot Editor")
+            self.win.geometry("1100x780")
+            self.win.configure(bg=T["BG"])
+            self.win.grab_set()
+            self._build_ui()
+            self._render()
 
         def _build_ui(self):
             tb = tk.Frame(self.win, bg=T["BG2"], pady=6); tb.pack(fill="x")
@@ -425,10 +456,10 @@ def _run_main_app():
                 rb = tk.Radiobutton(tb, text=self.LABELS[t], variable=self.tool_var, value=t,
                     command=self._tool_changed, font=(T["FONT"],9,"bold"), fg=T["FG"], bg=T["BG2"],
                     selectcolor=T["BG3"], activebackground=T["BG3"], activeforeground=T["ACCENT"],
-                    indicatoron=0, padx=10, pady=5, relief="flat", bd=0, cursor="hand2")
+                    indicatoron=0, padx=10, pady=5, relief="flat", bd=0)
                 rb.pack(side="left", padx=2)
             tk.Frame(tb, bg=T["GREY"], width=1).pack(side="left", fill="y", padx=8, pady=4)
-            self.swatch = tk.Label(tb, text="  ", bg=self.color, width=3, relief="raised", bd=1, cursor="hand2")
+            self.swatch = tk.Label(tb, text="  ", bg=self.color, width=3, relief="raised", bd=1)
             self.swatch.pack(side="left", padx=(4,2)); self.swatch.bind("<Button-1>", self._pick_color)
             tk.Label(tb, text="Color", font=(T["FONT"],8), fg=T["GREY"], bg=T["BG2"]).pack(side="left", padx=(0,8))
             tk.Label(tb, text="Width:", font=(T["FONT"],8), fg=T["GREY"], bg=T["BG2"]).pack(side="left")
@@ -481,16 +512,24 @@ def _run_main_app():
 
         def _undo(self):
             if len(self.history) > 1:
-                self.history.pop(); self.img = self.history[-1].copy(); self._render()
+                self.history.pop()
+                self.img = self.history[-1].copy()
+                self._render()
                 self.status.set("Undo")
-            else: self.status.set("Nothing to undo")
+            else:
+                self.status.set("Nothing to undo")
 
         def _reset(self):
             self.img = self.original.copy().convert("RGBA")
-            self.history = [self.img.copy()]; self._render(); self.status.set("Reset to original")
+            self.history = [self.img.copy()]
+            self._render()
+            self.status.set("Reset to original")
 
         def _press(self, e):
-            x, y = self._cc(e); self._start = (x, y); self._freehand = [(x, y)]; self.width = self.w_var.get()
+            x, y = self._cc(e)
+            self._start = (x, y)
+            self._freehand = [(x, y)]
+            self.width = self.w_var.get()
 
         def _drag(self, e):
             x, y = self._cc(e)
@@ -548,7 +587,10 @@ def _run_main_app():
                     self.img = self.img.crop((cx1,cy1,cx2,cy2)); self.history[-1] = self.img.copy()
                     self.status.set(f"Cropped to {cx2-cx1}x{cy2-cy1}")
 
-            self._start = None; self._freehand = []; self._preview_id = None; self._render()
+            self._start = None
+            self._freehand = []
+            self._preview_id = None
+            self._render()
 
         def _save_to_step(self):
             if self.on_save: self.on_save(self.img.convert("RGB"))
@@ -563,12 +605,19 @@ def _run_main_app():
 
     class ProcessDocumenter:
         def __init__(self, root):
-            self.root = root; root.title("Auto-Doc"); root.geometry("1060x960")
-            root.configure(bg=T["BG"]); root.resizable(True, True)
-            self.steps = []; self.step_counter = 1
+            self.root = root
+            root.title("Auto-Doc")
+            root.geometry("1060x960")
+            root.configure(bg=T["BG"])
+            root.resizable(True, True)
+            self.steps = []
+            self.step_counter = 1
             self.temp_dir = tempfile.mkdtemp()
-            self.capture_paused = False; self._pending_shot = None
+            self.capture_paused = False
+            self._pending_shot = None
             self.highlight_cursor = tk.BooleanVar(value=True)
+            self.click_cap_var = tk.BooleanVar(value=False)
+            self._mouse_listener = None
             atexit.register(lambda: shutil.rmtree(self.temp_dir, ignore_errors=True))
             self._build_ui(); root.after(600, self._os_tips)
 
@@ -628,10 +677,14 @@ def _run_main_app():
             tk.Label(entry, text="  F9 = screenshot + add  ·  F10 = pause  ·  F11 = export",
                      font=(T["FONT"],8), fg=T["GREY"], bg=T["BG3"]).pack(anchor="w", pady=(6,0))
             orow = tk.Frame(entry, bg=T["BG3"]); orow.pack(anchor="w", pady=(4,0))
-            tk.Checkbutton(orow, text="  Highlight cursor in screenshots", variable=self.highlight_cursor,
-                           font=(T["FONT"],9), fg="#80cbc4", bg=T["BG3"], selectcolor="#111c2b",
-                           activebackground=T["BG3"], activeforeground="#80cbc4",
-                           relief="flat", bd=0, cursor="hand2").pack(side="left")
+            _cb_kw = dict(font=(T["FONT"],9), fg="#80cbc4", bg=T["BG3"], selectcolor="#111c2b",
+                          activebackground=T["BG3"], activeforeground="#80cbc4",
+                          relief="flat", bd=0)
+            tk.Checkbutton(orow, text="  Highlight cursor in screenshots",
+                           variable=self.highlight_cursor, **_cb_kw).pack(side="left")
+            tk.Checkbutton(orow, text="  Auto-capture on click",
+                           variable=self.click_cap_var,
+                           command=self._toggle_click_capture, **_cb_kw).pack(side="left", padx=(16,0))
 
             steps_sec = self._section(left, "DOCUMENTED STEPS  (double-click to edit screenshot)")
             ssb = tk.Scrollbar(steps_sec); ssb.pack(side="right", fill="y")
@@ -665,7 +718,7 @@ def _run_main_app():
             pc.pack(fill="both", expand=True, padx=14, pady=(0,6))
             self.pinfo = tk.StringVar(value="Select a step to preview its screenshot")
             tk.Label(pc, textvariable=self.pinfo, font=(T["FONT"],8), fg=T["GREY"], bg=T["BG3"]).pack(anchor="w", pady=(0,6))
-            self.pcanvas = tk.Canvas(pc, bg=T["BG2"], highlightthickness=0, bd=0, cursor="hand2")
+            self.pcanvas = tk.Canvas(pc, bg=T["BG2"], highlightthickness=0, bd=0)
             self.pcanvas.pack(fill="both", expand=True)
             self.pcanvas.bind("<Button-1>", lambda e: self._open_editor())
             self._ptk = None
@@ -796,6 +849,49 @@ def _run_main_app():
             tips = {"Darwin":("macOS Permissions","For screenshots:\nSystem Settings > Privacy & Security > Screen Recording\n> Enable for Terminal. Restart app after granting."),
                     "Linux":("Linux Tips","Install xdotool: sudo apt install xdotool\nIf F-keys fail: sudo usermod -aG input $USER")}
             if OS in tips: messagebox.showinfo(*tips[OS])
+
+        # -- Click capture --
+        def _is_in_app_window(self, x, y):
+            try:
+                wx, wy = self.root.winfo_rootx(), self.root.winfo_rooty()
+                ww, wh = self.root.winfo_width(), self.root.winfo_height()
+                return wx <= x <= wx + ww and wy <= y <= wy + wh
+            except:
+                return False
+
+        def _toggle_click_capture(self):
+            from pynput.mouse import Listener as MouseListener, Button
+            if self.click_cap_var.get():
+                def on_click(x, y, button, pressed):
+                    if not pressed or button != Button.left:
+                        return
+                    if self.capture_paused or not self.click_cap_var.get():
+                        return
+                    if self._is_in_app_window(x, y):
+                        return
+                    self.root.after(150, self._auto_capture_step)
+                self._mouse_listener = MouseListener(on_click=on_click)
+                self._mouse_listener.daemon = True
+                self._mouse_listener.start()
+                self._set_status("Auto-capture on click: ON")
+            else:
+                if self._mouse_listener:
+                    try: self._mouse_listener.stop()
+                    except: pass
+                    self._mouse_listener = None
+                self._set_status("Auto-capture on click: OFF")
+
+        def _auto_capture_step(self):
+            if self.capture_paused or not self.click_cap_var.get():
+                return
+            img = self._do_screenshot()
+            path = None
+            if img:
+                try: path = self._save_screenshot(img)
+                except: pass
+            desc = self.step_text.get("1.0", "end").strip() or f"Step {self.step_counter}"
+            self.step_text.delete("1.0", "end")
+            self._commit_step(desc, path)
 
         # -- Screenshot actions --
         def _do_screenshot(self):
@@ -987,6 +1083,9 @@ def _run_main_app():
     def on_close():
         if fkey_listener:
             try: fkey_listener.stop()
+            except: pass
+        if app._mouse_listener:
+            try: app._mouse_listener.stop()
             except: pass
         root.destroy()
     root.protocol("WM_DELETE_WINDOW", on_close); root.mainloop()
