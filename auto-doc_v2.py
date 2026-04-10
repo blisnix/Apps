@@ -618,8 +618,12 @@ def _run_main_app():
             self.highlight_cursor = tk.BooleanVar(value=True)
             self.click_cap_var = tk.BooleanVar(value=False)
             self._mouse_listener = None
+            self._last_focus_time = 0.0
             atexit.register(lambda: shutil.rmtree(self.temp_dir, ignore_errors=True))
-            self._build_ui(); root.after(600, self._os_tips)
+            self._build_ui()
+            root.bind("<FocusIn>", lambda e: setattr(self, "_last_focus_time", time.monotonic()))
+            root.bind("<Map>", lambda e: setattr(self, "_last_focus_time", time.monotonic()))
+            root.after(600, self._os_tips)
 
         def _build_ui(self):
             os_name = OS_NAMES.get(OS, OS)
@@ -884,7 +888,10 @@ def _run_main_app():
         def _auto_capture_step(self):
             if self.capture_paused or not self.click_cap_var.get():
                 return
-            img = self._do_screenshot()
+            if time.monotonic() - self._last_focus_time < 1.0:
+                return  # Ignore the click that restored the app
+            # App is already minimized — take screenshot silently without deiconifying
+            img = take_screenshot_at_mouse(highlight=self.highlight_cursor.get())
             path = None
             if img:
                 try: path = self._save_screenshot(img)
@@ -990,8 +997,10 @@ def _run_main_app():
         # -- Session save/load --
         def _save_session(self):
             path = filedialog.asksaveasfilename(defaultextension=".json",
-                filetypes=[("JSON","*.json")], title="Save Session")
+                filetypes=[("Word Document","*.docx"),("JSON","*.json")], title="Save / Export")
             if not path: return
+            if path.lower().endswith(".docx"):
+                self._export_word(out_path=path); return
             data = {"title": self.title_var.get(), "author": self.author_var.get(),
                     "steps": [{k:v for k,v in s.items() if k != "screenshot_path"} for s in self.steps]}
             with open(path,"w") as f: json.dump(data, f, indent=2)
@@ -1006,7 +1015,7 @@ def _run_main_app():
             self._set_status("Session loaded")
 
         # -- Export to Word --
-        def _export_word(self):
+        def _export_word(self, out_path=None):
             if not self.steps: messagebox.showwarning("No Steps","No steps to export."); return
             title = self.title_var.get().strip() or "Auto-Doc"
             author = self.author_var.get().strip() or "IT Service Desk"
@@ -1067,13 +1076,14 @@ def _run_main_app():
 
             safe = "".join(c for c in title if c.isalnum() or c in " _-").strip().replace(" ","_")
             fname = f"{safe}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-            out_path = filedialog.asksaveasfilename(
-                defaultextension=".docx",
-                filetypes=[("Word Document", "*.docx")],
-                initialdir=os.path.expanduser("~/Documents"),
-                initialfile=fname,
-                title="Export to Word",
-            )
+            if not out_path:
+                out_path = filedialog.asksaveasfilename(
+                    defaultextension=".docx",
+                    filetypes=[("Word Document", "*.docx")],
+                    initialdir=os.path.expanduser("~/Documents"),
+                    initialfile=fname,
+                    title="Export to Word",
+                )
             if not out_path: return
             doc.save(out_path); messagebox.showinfo("Exported!", f"Saved to:\n{out_path}")
             open_file(out_path)
